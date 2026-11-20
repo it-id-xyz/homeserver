@@ -155,6 +155,27 @@
             </table>
           </div>
         </div>
+
+        <div class="glass panel" style="margin-top:20px">
+          <div class="panel-head">
+            <h3>Log Aktivitas Server</h3>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <div class="seg" id="log-filter">
+                <button class="active" data-lf="all">Semua</button>
+                <button data-lf="UPLOAD">Upload</button>
+                <button data-lf="DELETE">Delete</button>
+                <button data-lf="SYSTEM">Sistem</button>
+              </div>
+              <button id="btn-refresh-logs" class="btn btn-sm btn-ghost"><i data-lucide="refresh-cw"></i> Refresh</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>Waktu</th><th>Aksi</th><th>Pengguna</th><th>File / Target</th><th>Detail</th></tr></thead>
+              <tbody id="logs-body"><tr><td colspan="5" class="muted" style="text-align:center;padding:24px">Memuat log aktivitas…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </main>
   </div>
