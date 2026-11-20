@@ -196,6 +196,7 @@ function switchTab(tab) {
   $("#page-title").textContent = TITLES[tab];
   closeSidebar();
   if (tab === "gallery") observeThumbs();
+  if (tab === "admin") loadAdminLogs();
   syncTelemetry();
 }
 $$(".nav-item").forEach(n => n.addEventListener("click", () => switchTab(n.dataset.tab)));
@@ -456,21 +457,47 @@ async function openLightbox(i) {
   $("#lb-meta").textContent = `${fmtBytes(m.size)} • ${toDate(m.createdAt)?.toLocaleString("id-ID") || ""}`;
   $("#lb-prev").style.visibility = i > 0 ? "visible" : "hidden";
   $("#lb-next").style.visibility = i < state.media.length - 1 ? "visible" : "hidden";
-  const stage = $("#lb-stage"); stage.innerHTML = `<div class="spinner"></div>`;
+
+  const stage = $("#lb-stage");
+  const cachedThumb = thumbCache.get(m.id);
+  // Tampilkan thumbnail dari cache secara instan sementara video/foto dimuat
+  stage.innerHTML = cachedThumb
+    ? `<img src="${cachedThumb}" style="filter:blur(6px);opacity:.85;transition:.2s" alt="" />`
+    : `<div class="spinner"></div>`;
+
   const token = ++openLightbox.t;
   try {
     const url = await getSignedUrl(m.id);
     if (token !== openLightbox.t) return;
-    stage.innerHTML = "";
     const el = document.createElement(m.type === "video" ? "video" : "img");
-    if (m.type === "video") { el.controls = true; el.autoplay = true; el.playsInline = true; }
-    el.src = url; el.onerror = () => toast("Gagal memuat file dari server.", "error");
-    stage.append(el);
-  } catch (e) { stage.innerHTML = ""; toast(e.message, "error"); }
+    if (m.type === "video") {
+      el.controls = true; el.autoplay = true; el.playsInline = true; el.preload = "metadata";
+      if (cachedThumb) el.poster = cachedThumb;
+      el.src = url;
+      el.onerror = () => toast("Gagal memuat video dari server.", "error");
+      stage.innerHTML = "";
+      stage.append(el);
+    } else {
+      el.src = url;
+      el.onload = () => { if (token === openLightbox.t) { stage.innerHTML = ""; stage.append(el); } };
+      el.onerror = () => toast("Gagal memuat foto dari server.", "error");
+    }
+
+    // Preload foto berikutnya & sebelumnya di background
+    [i + 1, i - 1].forEach(adj => {
+      const nextItem = state.media[adj];
+      if (nextItem && nextItem.type === "image") {
+        getSignedUrl(nextItem.id).then(u => { const pre = new Image(); pre.src = u; }).catch(() => {});
+      }
+    });
+  } catch (e) { if (token === openLightbox.t) { stage.innerHTML = ""; toast(e.message, "error"); } }
 }
 openLightbox.t = 0;
+
 function closeLightbox() {
   openLightbox.t++; state.lbIndex = -1;
+  const vid = $("#lb-stage video");
+  if (vid) { vid.pause(); vid.removeAttribute("src"); vid.load(); } // lepas kunci file di Windows
   $("#lightbox").classList.add("hidden"); $("#lb-stage").innerHTML = ""; document.body.style.overflow = "";
 }
 $("#lb-close").addEventListener("click", closeLightbox);
@@ -494,11 +521,13 @@ $("#lb-download").addEventListener("click", async () => {
 $("#lb-delete").addEventListener("click", async () => {
   const m = state.media[state.lbIndex]; if (!m) return;
   if (!await confirmModal("Hapus file?", `"${m.name}" akan dihapus permanen dari server.`, "Hapus", true)) return;
+  const vid = $("#lb-stage video");
+  if (vid) { vid.pause(); vid.removeAttribute("src"); vid.load(); }
   try {
     await apiJson(`/api/media/${encodeURIComponent(m.id)}`, "DELETE");
     toast("File berhasil dihapus.", "success");
     const u = thumbCache.get(m.id); if (u) { URL.revokeObjectURL(u); thumbCache.delete(m.id); }
-    closeLightbox(); // daftar & kuota diperbarui otomatis oleh listener Firestore
+    closeLightbox();
   } catch (e) { toast(e.message, "error"); }
 });
 
@@ -678,4 +707,54 @@ $("#admin-filter").addEventListener("click", e => {
   renderAdmin();
 });
 
+// Catat perubahan status user ke log server saat admin klik Approve/Reject
+// (Di dalam handler #admin-body setelah await updateDoc(...)):
+// apiJson("/api/actions/audit", "POST", { action: "USER_STATUS", target: u.email || u.displayName, detail: `Status diubah menjadi ${act}` }).catch(() => {});
+
+state.adminLogs = [];
+state.logFilter = "all";
+
+async function loadAdminLogs() {
+  if (state.profile?.role !== "admin") return;
+  const body = $("#logs-body");
+  try {
+    const r = await apiJson("/api/actions/logs?limit=100");
+    state.adminLogs = r.logs || [];
+    renderAdminLogs();
+  } catch (e) {
+    if (body) body.innerHTML = `<tr><td colspan="5" class="muted" style="text-align:center;padding:24px">Gagal memuat log: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderAdminLogs() {
+  const body = $("#logs-body"); if (!body) return;
+  const rows = state.adminLogs.filter(l => {
+    if (state.logFilter === "all") return true;
+    if (state.logFilter === "SYSTEM") return !["UPLOAD", "DELETE"].includes(l.action);
+    return l.action === state.logFilter;
+  });
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="5" class="muted" style="text-align:center;padding:24px">Belum ada catatan aktivitas.</td></tr>`;
+    return;
+  }
+  const badgeCls = a => a === "UPLOAD" ? "badge-approved" : a === "DELETE" ? "badge-rejected" : "badge-pending";
+  body.innerHTML = rows.map(l => {
+    const t = l.time ? new Date(l.time).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "-";
+    return `<tr>
+      <td class="muted small" style="white-space:nowrap">${esc(t)}</td>
+      <td><span class="badge ${badgeCls(l.action)}" style="margin-top:0">${esc(l.action || "-")}</span></td>
+      <td class="small">${esc(l.email || l.uid || "system")}</td>
+      <td class="small"><strong>${esc(l.target || "-")}</strong></td>
+      <td class="muted small">${esc(l.detail || "-")}</td>
+    </tr>`;
+  }).join("");
+}
+
+$("#btn-refresh-logs")?.addEventListener("click", loadAdminLogs);
+$("#log-filter")?.addEventListener("click", e => {
+  const b = e.target.closest("button[data-lf]"); if (!b) return;
+  state.logFilter = b.dataset.lf;
+  $$("#log-filter button").forEach(x => x.classList.toggle("active", x === b));
+  renderAdminLogs();
+});
 icons();
