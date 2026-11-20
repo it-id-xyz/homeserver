@@ -459,11 +459,7 @@ async function openLightbox(i) {
   $("#lb-next").style.visibility = i < state.media.length - 1 ? "visible" : "hidden";
 
   const stage = $("#lb-stage");
-  const cachedThumb = thumbCache.get(m.id);
-  // Tampilkan thumbnail dari cache secara instan sementara video/foto dimuat
-  stage.innerHTML = cachedThumb
-    ? `<img src="${cachedThumb}" style="filter:blur(6px);opacity:.85;transition:.2s" alt="" />`
-    : `<div class="spinner"></div>`;
+  stage.innerHTML = `<div class="spinner"></div>`;
 
   const token = ++openLightbox.t;
   try {
@@ -471,6 +467,7 @@ async function openLightbox(i) {
     if (token !== openLightbox.t) return;
     const el = document.createElement(m.type === "video" ? "video" : "img");
     if (m.type === "video") {
+      const cachedThumb = thumbCache.get(m.id);
       el.controls = true; el.autoplay = true; el.playsInline = true; el.preload = "metadata";
       if (cachedThumb) el.poster = cachedThumb;
       el.src = url;
@@ -478,12 +475,12 @@ async function openLightbox(i) {
       stage.innerHTML = "";
       stage.append(el);
     } else {
-      el.src = url;
       el.onload = () => { if (token === openLightbox.t) { stage.innerHTML = ""; stage.append(el); } };
       el.onerror = () => toast("Gagal memuat foto dari server.", "error");
+      el.src = url;
     }
 
-    // Preload foto berikutnya & sebelumnya di background
+    // Preload foto berikutnya & sebelumnya di background biar geser-geser instan
     [i + 1, i - 1].forEach(adj => {
       const nextItem = state.media[adj];
       if (nextItem && nextItem.type === "image") {
