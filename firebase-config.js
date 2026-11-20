@@ -15,7 +15,7 @@ export const firebaseConfig = {
 };
 
 // URL backend home server (via Cloudflare Tunnel), tanpa trailing slash
-export const API_BASE_URL = "https://desktop-e1c2168.note-therepod.ts.net";
+export const API_BASE_URL = "https://desktop-e1c2168.note-theropod.ts.net";
 
 export const STORAGE_LIMIT_BYTES = 64424509440; // 60 GB
 export const CHUNK_SIZE = 5 * 1024 * 1024;      // 5 MB
