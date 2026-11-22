@@ -8,7 +8,7 @@ import {
 /* ============================ Helpers ============================ */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const icons = (root = document) => window.lucide && window.lucide.createIcons({ root });
+const icons = () => window.lucide && window.lucide.createIcons();
 const esc = (s = "") => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const img = new Image();
