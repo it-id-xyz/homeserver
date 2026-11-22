@@ -178,10 +178,17 @@
           </div>
 
           <div class="album-controls" id="album-controls">
-            <select id="album-select" class="input-select" title="Filter Album">
-              <option value="all">Semua Album</option>
-            </select>
-            <button id="btn-new-album" class="btn btn-sm btn-ghost" title="Buat Album Baru"><i data-lucide="folder-plus"></i> Album</button>
+            <div class="custom-dd" id="album-dd">
+              <button type="button" id="album-dd-btn" class="custom-dd-btn">
+                <i data-lucide="folder"></i>
+                <span id="album-dd-label">Semua Album</span>
+                <i data-lucide="chevron-down" class="dd-caret"></i>
+              </button>
+              <div id="album-dd-menu" class="glass custom-dd-menu hidden"></div>
+            </div>
+            <button id="btn-new-album" class="btn btn-sm btn-ghost" title="Buat Album Baru">
+              <i data-lucide="folder-plus"></i> Album
+            </button>
           </div>
         </div>
 
@@ -263,7 +270,89 @@
       </div>
     </div>
   </div>
+<!-- Modal: Buat Album Baru -->
+  <div id="modal-new-album" class="modal hidden">
+    <div class="glass modal-card">
+      <div class="modal-head">
+        <div class="modal-ico"><i data-lucide="folder-plus"></i></div>
+        <div>
+          <h3>Buat Album Baru</h3>
+          <p class="muted small">File yang diunggah saat album aktif otomatis masuk ke sini.</p>
+        </div>
+      </div>
+      <input id="input-new-album" class="glass-input" type="text" maxlength="60" placeholder="Contoh: Liburan Bali, Dokumen Kerja…" autocomplete="off" />
+      <div class="modal-actions">
+        <button type="button" id="cancel-new-album" class="btn btn-ghost">Batal</button>
+        <button type="button" id="save-new-album" class="btn btn-primary">Buat Album</button>
+      </div>
+    </div>
+  </div>
 
+  <!-- Modal: Pindah / Pilih Album Media -->
+  <div id="modal-move-album" class="modal hidden">
+    <div class="glass modal-card">
+      <div class="modal-head">
+        <div class="modal-ico"><i data-lucide="folder-input"></i></div>
+        <div>
+          <h3>Atur Album</h3>
+          <p id="move-album-sub" class="muted small">Pilih album tujuan untuk file ini.</p>
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="muted small" for="select-move-album">Pilih Album</label>
+        <div class="select-wrap">
+          <select id="select-move-album" class="glass-select"></select>
+          <i data-lucide="chevron-down"></i>
+        </div>
+      </div>
+      <div id="move-new-album-wrap" class="field-group hidden">
+        <label class="muted small" for="input-move-new-album">Nama Album Baru</label>
+        <input id="input-move-new-album" class="glass-input" type="text" maxlength="60" placeholder="Ketik nama album baru…" autocomplete="off" />
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="cancel-move-album" class="btn btn-ghost">Batal</button>
+        <button type="button" id="save-move-album" class="btn btn-primary">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Share Link Sementara -->
+  <div id="modal-share" class="modal hidden">
+    <div class="glass modal-card">
+      <div class="modal-head">
+        <div class="modal-ico"><i data-lucide="share-2"></i></div>
+        <div>
+          <h3>Bagikan Link Sementara</h3>
+          <p id="share-file-name" class="muted small">Akses langsung tanpa perlu login.</p>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <span class="muted small">Masa Berlaku Link</span>
+        <div class="preset-grid" id="share-presets">
+          <button type="button" class="preset-btn" data-hrs="1">1 Jam</button>
+          <button type="button" class="preset-btn" data-hrs="6">6 Jam</button>
+          <button type="button" class="preset-btn active" data-hrs="24">24 Jam</button>
+          <button type="button" class="preset-btn" data-hrs="72">3 Hari</button>
+          <button type="button" class="preset-btn" data-hrs="168">7 Hari</button>
+        </div>
+      </div>
+
+      <div id="share-result-box" class="share-result hidden">
+        <input id="share-url-input" class="glass-input" type="text" readonly />
+        <button type="button" id="btn-copy-share" class="btn btn-sm btn-primary" title="Salin Link">
+          <i data-lucide="copy"></i> Salin
+        </button>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="close-share-modal" class="btn btn-ghost">Tutup</button>
+        <button type="button" id="btn-generate-share" class="btn btn-primary">
+          <i data-lucide="link"></i> Buat &amp; Salin Link
+        </button>
+      </div>
+    </div>
+  </div>
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <script type="module" src="app.js"></script>
