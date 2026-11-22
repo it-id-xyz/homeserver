@@ -207,10 +207,16 @@ $("#btn-menu").addEventListener("click", openSidebar);
 $("#sidebar-backdrop").addEventListener("click", closeSidebar);
 // Minimize / Maximize Sidebar (simpan preferensi di localStorage)
 const sidebarEl = $("#sidebar");
-if (localStorage.getItem("hc_sb_collapsed") === "1") sidebarEl.classList.add("collapsed");
-$("#btn-collapse")?.addEventListener("click", () => {
-  sidebarEl.classList.toggle("collapsed");
-  localStorage.setItem("hc_sb_collapsed", sidebarEl.classList.contains("collapsed") ? "1" : "0");
+sidebarEl?.classList.add("collapsed");
+sidebarEl?.addEventListener("click", e => {
+  if (e.target.closest("#btn-collapse")) {
+    e.stopPropagation();
+    sidebarEl.classList.add("collapsed");
+    return;
+  }
+  if (sidebarEl.classList.contains("collapsed") && window.innerWidth > 900) {
+    sidebarEl.classList.remove("collapsed");
+  }
 });
 
 // Search di Topbar (otomatis pindah ke tab Galeri jika user mengetik pencarian)
