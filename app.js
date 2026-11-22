@@ -8,7 +8,7 @@ import {
 /* ============================ Helpers ============================ */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const icons = (root = document) => window.lucide && window.lucide.createIcons({ root });
+const icons = () => window.lucide && window.lucide.createIcons();
 const esc = (s = "") => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 
@@ -163,9 +163,9 @@ function renderByProfile() {
     showView("view-pending"); return;
   }
   // Approved
-  $("#user-photo").src = p.photoURL || u.photoURL || "";
-  $("#user-name").textContent = p.displayName || "-";
-  $("#user-email").textContent = p.email || "-";
+  if ($("#user-photo")) $("#user-photo").src = p.photoURL || u.photoURL || "";
+  if ($("#user-name")) $("#user-name").textContent = p.displayName || "-";
+  if ($("#user-email")) $("#user-email").textContent = p.email || "-";
   const isAdmin = p.role === "admin";
   $$(".admin-only").forEach(e => e.classList.toggle("hidden", !isAdmin));
   if (!appStarted || startedUid !== u.uid) startApp(isAdmin);
@@ -544,51 +544,18 @@ async function getSignedUrl(id, download = false) {
 
 /* ---- Lightbox ---- */
 async function openLightbox(i) {
-  const m = state.media[i]; if (!m) return;
+  const m = state.filteredMedia[i]; if (!m) return;
   state.lbIndex = i;
   $("#lightbox").classList.remove("hidden"); document.body.style.overflow = "hidden";
   $("#lb-name").textContent = m.name;
   $("#lb-meta").textContent = `${fmtBytes(m.size)} • ${toDate(m.createdAt)?.toLocaleString("id-ID") || ""}`;
   $("#lb-prev").style.visibility = i > 0 ? "visible" : "hidden";
-  $("#lb-next").style.visibility = i < state.media.length - 1 ? "visible" : "hidden";
+  $("#lb-next").style.visibility = i < state.filteredMedia.length - 1 ? "visible" : "hidden";
+
   const isTrashed = Boolean(m.deletedAt);
   $("#lb-restore")?.classList.toggle("hidden", !isTrashed);
   $("#lb-album")?.classList.toggle("hidden", isTrashed);
   $("#lb-share")?.classList.toggle("hidden", isTrashed);
-  // Handler Share Link Sementara (24 Jam)
-  $("#lb-share")?.addEventListener("click", async () => {
-    const m = state.filteredMedia[state.lbIndex]; if (!m) return;
-    const hrsInput = prompt("Masa berlaku link (dalam jam, 1 - 168):", "24");
-    if (hrsInput === null) return;
-    try {
-      const r = await apiJson(`/api/media/${encodeURIComponent(m.id)}/share`, "POST", { hours: parseInt(hrsInput, 10) || 24 });
-      await navigator.clipboard.writeText(r.url).catch(() => {});
-      toast(`Link share (${r.expiresInHours} jam) disalin ke clipboard!`, "success", 5000);
-    } catch (e) { toast(e.message, "error"); }
-  });
-  
-  // Handler Pindah Album
-  $("#lb-album")?.addEventListener("click", async () => {
-    const m = state.filteredMedia[state.lbIndex]; if (!m) return;
-    const name = prompt("Masukkan nama album (kosongkan untuk mengeluarkan dari album):", m.album || "");
-    if (name === null) return;
-    try {
-      const clean = name.trim();
-      if (clean && !state.customAlbums.includes(clean)) state.customAlbums.push(clean);
-      await apiJson(`/api/media/${encodeURIComponent(m.id)}/album`, "POST", { album: clean });
-      toast(clean ? `Dipindahkan ke album "${clean}".` : "Dikeluarkan dari album.", "success");
-    } catch (e) { toast(e.message, "error"); }
-  });
-  
-  // Handler Restore dari Sampah
-  $("#lb-restore")?.addEventListener("click", async () => {
-    const m = state.filteredMedia[state.lbIndex]; if (!m) return;
-    try {
-      await apiJson(`/api/media/${encodeURIComponent(m.id)}/restore`, "POST");
-      toast(`"${m.name}" dipulihkan dari sampah.`, "success");
-      closeLightbox();
-    } catch (e) { toast(e.message, "error"); }
-  });
 
   const stage = $("#lb-stage");
   stage.innerHTML = `<div class="spinner"></div>`;
@@ -611,7 +578,6 @@ async function openLightbox(i) {
       el.onerror = () => toast("Gagal memuat foto dari server.", "error");
       el.src = url;
     }
-
   } catch (e) { if (token === openLightbox.t) { stage.innerHTML = ""; toast(e.message, "error"); } }
 }
 openLightbox.t = 0;
@@ -619,7 +585,7 @@ openLightbox.t = 0;
 function closeLightbox() {
   openLightbox.t++; state.lbIndex = -1;
   const vid = $("#lb-stage video");
-  if (vid) { vid.pause(); vid.removeAttribute("src"); vid.load(); } // lepas kunci file di Windows
+  if (vid) { vid.pause(); vid.removeAttribute("src"); vid.load(); }
   $("#lightbox").classList.add("hidden"); $("#lb-stage").innerHTML = ""; document.body.style.overflow = "";
 }
 $("#lb-close").addEventListener("click", closeLightbox);
@@ -630,25 +596,65 @@ document.addEventListener("keydown", e => {
   if ($("#lightbox").classList.contains("hidden") || !$("#modal").classList.contains("hidden")) return;
   if (e.key === "Escape") closeLightbox();
   if (e.key === "ArrowLeft" && state.lbIndex > 0) openLightbox(state.lbIndex - 1);
-  if (e.key === "ArrowRight" && state.lbIndex < state.media.length - 1) openLightbox(state.lbIndex + 1);
+  if (e.key === "ArrowRight" && state.lbIndex < state.filteredMedia.length - 1) openLightbox(state.lbIndex + 1);
 });
+
+$("#lb-share")?.addEventListener("click", async () => {
+  const m = state.filteredMedia[state.lbIndex]; if (!m) return;
+  const hrsInput = prompt("Masa berlaku link (dalam jam, 1 - 168):", "24");
+  if (hrsInput === null) return;
+  try {
+    const r = await apiJson(`/api/media/${encodeURIComponent(m.id)}/share`, "POST", { hours: parseInt(hrsInput, 10) || 24 });
+    await navigator.clipboard.writeText(r.url).catch(() => {});
+    toast(`Link share (${r.expiresInHours} jam) disalin ke clipboard!`, "success", 5000);
+  } catch (e) { toast(e.message, "error"); }
+});
+
+$("#lb-album")?.addEventListener("click", async () => {
+  const m = state.filteredMedia[state.lbIndex]; if (!m) return;
+  const name = prompt("Masukkan nama album (kosongkan untuk mengeluarkan dari album):", m.album || "");
+  if (name === null) return;
+  try {
+    const clean = name.trim();
+    if (clean && !state.customAlbums.includes(clean)) state.customAlbums.push(clean);
+    await apiJson(`/api/media/${encodeURIComponent(m.id)}/album`, "POST", { album: clean });
+    toast(clean ? `Dipindahkan ke album "${clean}".` : "Dikeluarkan dari album.", "success");
+  } catch (e) { toast(e.message, "error"); }
+});
+
+$("#lb-restore")?.addEventListener("click", async () => {
+  const m = state.filteredMedia[state.lbIndex]; if (!m) return;
+  try {
+    await apiJson(`/api/media/${encodeURIComponent(m.id)}/restore`, "POST");
+    toast(`"${m.name}" dipulihkan dari sampah.`, "success");
+    closeLightbox();
+  } catch (e) { toast(e.message, "error"); }
+});
+
 $("#lb-download").addEventListener("click", async () => {
-  const m = state.media[state.lbIndex]; if (!m) return;
+  const m = state.filteredMedia[state.lbIndex]; if (!m) return;
   try {
     const url = await getSignedUrl(m.id, true);
     const a = document.createElement("a"); a.href = url; a.download = m.name; document.body.appendChild(a); a.click(); a.remove();
     toast("Download dimulai.", "success", 2500);
   } catch (e) { toast(e.message, "error"); }
 });
+
 $("#lb-delete").addEventListener("click", async () => {
-  const m = state.media[state.lbIndex]; if (!m) return;
-  if (!await confirmModal("Hapus file?", `"${m.name}" akan dihapus permanen dari server.`, "Hapus", true)) return;
+  const m = state.filteredMedia[state.lbIndex]; if (!m) return;
+  const isTrashed = Boolean(m.deletedAt);
+  if (!await confirmModal(
+    isTrashed ? "Hapus permanen?" : "Pindahkan ke sampah?",
+    isTrashed ? `"${m.name}" akan dihapus permanen dan tidak bisa dikembalikan.` : `"${m.name}" akan dipindah ke sampah selama 7 hari sebelum dihapus permanen.`,
+    isTrashed ? "Hapus Permanen" : "Pindah ke Sampah",
+    true
+  )) return;
   const vid = $("#lb-stage video");
   if (vid) { vid.pause(); vid.removeAttribute("src"); vid.load(); }
   try {
     await apiJson(`/api/media/${encodeURIComponent(m.id)}`, "DELETE");
-    toast("File berhasil dihapus.", "success");
-    const u = thumbCache.get(m.id); if (u) { URL.revokeObjectURL(u); thumbCache.delete(m.id); }
+    toast(isTrashed ? "File dihapus permanen." : "File dipindahkan ke sampah.", "success");
+    if (isTrashed) { const u = thumbCache.get(m.id); if (u) { URL.revokeObjectURL(u); thumbCache.delete(m.id); } }
     closeLightbox();
   } catch (e) { toast(e.message, "error"); }
 });
@@ -736,9 +742,8 @@ function sendChunk(form, onProgress) {
 async function uploadFileChunked(file, setProgress) {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   setProgress(0, "Menyiapkan upload…");
-  const activeAlbum = state.galleryType !== "trash" && state.galleryAlbum !== "all" ? state.galleryAlbum : null;
-  await apiJson("/api/upload/complete", "POST", {
-    uploadId, fileName: file.name, fileSize: file.size, mimeType: file.type, totalChunks, album: activeAlbum, ...dims
+  const { uploadId } = await apiJson("/api/upload/init", "POST", {
+    fileName: file.name, fileSize: file.size, mimeType: file.type, totalChunks
   });
   if (!uploadId) throw new Error("Server tidak mengembalikan uploadId.");
 
@@ -756,7 +761,7 @@ async function uploadFileChunked(file, setProgress) {
         });
         break;
       } catch (e) {
-        if (e.status === 413 || e.status === 507 || e.status === 403) throw e; // tidak bisa di-retry
+        if (e.status === 413 || e.status === 507 || e.status === 403) throw e;
         if (attempt >= 3) throw e;
         setProgress(clamp(sent / file.size * 100, 0, 99), `Mengulang chunk ${i + 1} (percobaan ${attempt + 1}/3)…`);
         await new Promise(r => setTimeout(r, 1000 * attempt));
@@ -766,7 +771,10 @@ async function uploadFileChunked(file, setProgress) {
   }
   setProgress(99, "Menyusun file di server…");
   const dims = await getDimensions(file);
-  await apiJson("/api/upload/complete", "POST", { uploadId, fileName: file.name, fileSize: file.size, mimeType: file.type, totalChunks, ...dims });
+  const activeAlbum = state.galleryType !== "trash" && state.galleryAlbum !== "all" ? state.galleryAlbum : null;
+  await apiJson("/api/upload/complete", "POST", {
+    uploadId, fileName: file.name, fileSize: file.size, mimeType: file.type, totalChunks, album: activeAlbum, ...dims
+  });
 }
 
 // Dimensi opsional untuk layout grid
