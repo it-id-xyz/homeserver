@@ -97,7 +97,8 @@ const apiJson = async (path, method = "GET", body) => {
 /* ============================ State ============================ */
 const state = {
   user: null, profile: null, tab: "monitor",
-  unsubs: [], media: [], lbIndex: -1,
+  unsubs: [], media: [], filteredMedia: [], lbIndex: -1,
+  galleryType: "all", galleryAlbum: "all", searchQuery: "", customAlbums: [],
   adminUsers: [], adminFilter: "all",
   uploadQueue: [], uploading: false, reservedBytes: 0
 };
@@ -204,7 +205,20 @@ const openSidebar = () => { $("#sidebar").classList.add("open"); $("#sidebar-bac
 const closeSidebar = () => { $("#sidebar").classList.remove("open"); $("#sidebar-backdrop").classList.remove("show"); };
 $("#btn-menu").addEventListener("click", openSidebar);
 $("#sidebar-backdrop").addEventListener("click", closeSidebar);
+// Minimize / Maximize Sidebar (simpan preferensi di localStorage)
+const sidebarEl = $("#sidebar");
+if (localStorage.getItem("hc_sb_collapsed") === "1") sidebarEl.classList.add("collapsed");
+$("#btn-collapse")?.addEventListener("click", () => {
+  sidebarEl.classList.toggle("collapsed");
+  localStorage.setItem("hc_sb_collapsed", sidebarEl.classList.contains("collapsed") ? "1" : "0");
+});
 
+// Search di Topbar (otomatis pindah ke tab Galeri jika user mengetik pencarian)
+$("#global-search")?.addEventListener("input", e => {
+  state.searchQuery = e.target.value.trim().toLowerCase();
+  if (state.searchQuery && state.tab !== "gallery") switchTab("gallery");
+  renderGallery();
+});
 /* ============================ Tab 1: Server Monitoring ============================ */
 /* Telemetry langsung dari backend (0 Firestore write). Payload GET /api/metrics & SSE:
    cpuUsage, cpuModel, cpuTemp, cpuTempAvailable, ramUsedGB, ramTotalGB, diskUsedGB, diskTotalGB,
@@ -391,16 +405,60 @@ function listenMedia() {
   }, err => toast(`Gagal memuat galeri: ${err.message}`, "error")));
 }
 
-/* media doc: { ownerUid, name, mimeType, type:"image"|"video", size, width?, height?, createdAt } */
+function updateAlbumOptions() {
+  const sel = $("#album-select"); if (!sel) return;
+  const set = new Set(state.customAlbums);
+  state.media.forEach(m => { if (!m.deletedAt && m.album) set.add(m.album); });
+  const current = state.galleryAlbum;
+  sel.innerHTML = `<option value="all">Semua Album</option>` +
+    [...set].sort().map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+  sel.value = set.has(current) ? current : "all";
+  state.galleryAlbum = sel.value;
+}
+
 function renderGallery() {
+  updateAlbumOptions();
+  const isTrash = state.galleryType === "trash";
+  const trashCount = state.media.filter(m => m.deletedAt).length;
+  const tb = $("#trash-badge");
+  if (tb) tb.textContent = trashCount ? `(${trashCount})` : "";
+
+  $("#trash-banner")?.classList.toggle("hidden", !isTrash);
+  $("#album-controls")?.classList.toggle("hidden", isTrash);
+  $("#dropzone")?.classList.toggle("hidden", isTrash);
+
+  // Filter berdasarkan Sampah / Tipe / Album / Search
+  state.filteredMedia = state.media.filter(m => {
+    if (isTrash) {
+      if (!m.deletedAt) return false;
+    } else {
+      if (m.deletedAt) return false;
+      if (state.galleryType !== "all" && m.type !== state.galleryType) return false;
+      if (state.galleryAlbum !== "all" && m.album !== state.galleryAlbum) return false;
+    }
+    if (state.searchQuery) {
+      const hay = `${m.name || ""} ${m.album || ""}`.toLowerCase();
+      if (!hay.includes(state.searchQuery)) return false;
+    }
+    return true;
+  });
+
   const wrap = $("#gallery-groups"); wrap.innerHTML = "";
-  $("#gallery-empty").classList.toggle("hidden", state.media.length > 0);
+  const emptyEl = $("#gallery-empty");
+  emptyEl.classList.toggle("hidden", state.filteredMedia.length > 0);
+  if (!state.filteredMedia.length) {
+    $("#gallery-empty-text").textContent = isTrash
+      ? "Sampah kosong."
+      : state.searchQuery ? `Tidak ada hasil untuk "${state.searchQuery}".` : "Belum ada foto atau video di tampilan ini.";
+  }
+
   const groups = new Map();
-  state.media.forEach((m, idx) => {
-    const key = dayLabel(toDate(m.createdAt));
+  state.filteredMedia.forEach((m, idx) => {
+    const key = isTrash ? "Item di Sampah" : dayLabel(toDate(m.createdAt));
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push({ m, idx });
   });
+
   for (const [label, items] of groups) {
     const h = document.createElement("h4"); h.className = "group-title"; h.textContent = label;
     const grid = document.createElement("div"); grid.className = "grid";
@@ -409,6 +467,7 @@ function renderGallery() {
       const wide = m.width && m.height && m.width / m.height > 1.6;
       t.className = `tile${wide ? " wide" : ""}`; t.dataset.id = m.id; t.title = m.name;
       t.innerHTML = `<div class="ph"><i data-lucide="${m.type === "video" ? "film" : "image"}"></i></div>` +
+        (m.album && !isTrash ? `<span class="album-tag">${esc(m.album)}</span>` : "") +
         (m.type === "video" ? `<span class="vbadge"><i data-lucide="play"></i>Video</span>` : "");
       t.addEventListener("click", () => openLightbox(idx));
       grid.append(t);
@@ -417,6 +476,38 @@ function renderGallery() {
   }
   icons(); observeThumbs();
 }
+
+// Filter Tipe & Sampah
+$("#gallery-type-filter")?.addEventListener("click", e => {
+  const b = e.target.closest("button[data-gt]"); if (!b) return;
+  state.galleryType = b.dataset.gt;
+  $$("#gallery-type-filter button").forEach(x => x.classList.toggle("active", x === b));
+  renderGallery();
+});
+
+// Pilih Album & Buat Album Baru
+$("#album-select")?.addEventListener("change", e => {
+  state.galleryAlbum = e.target.value;
+  renderGallery();
+});
+$("#btn-new-album")?.addEventListener("click", () => {
+  const name = prompt("Nama album baru:");
+  if (!name || !name.trim()) return;
+  const clean = name.trim().slice(0, 60);
+  if (!state.customAlbums.includes(clean)) state.customAlbums.push(clean);
+  state.galleryAlbum = clean;
+  renderGallery();
+  toast(`Album "${clean}" aktif. File yang di-upload sekarang otomatis masuk ke album ini.`, "info", 5000);
+});
+
+// Kosongkan Sampah
+$("#btn-empty-trash")?.addEventListener("click", async () => {
+  if (!await confirmModal("Kosongkan Sampah?", "Semua file di sampah akan dihapus permanen dan tidak bisa dikembalikan.", "Kosongkan", true)) return;
+  try {
+    const r = await apiJson("/api/media/empty-trash", "POST");
+    toast(`${r.removed || 0} file dihapus permanen.`, "success");
+  } catch (e) { toast(e.message, "error"); }
+});
 
 // Thumbnail lazy-load (butuh header Authorization -> fetch sebagai blob)
 const thumbCache = new Map();
@@ -460,6 +551,44 @@ async function openLightbox(i) {
   $("#lb-meta").textContent = `${fmtBytes(m.size)} • ${toDate(m.createdAt)?.toLocaleString("id-ID") || ""}`;
   $("#lb-prev").style.visibility = i > 0 ? "visible" : "hidden";
   $("#lb-next").style.visibility = i < state.media.length - 1 ? "visible" : "hidden";
+  const isTrashed = Boolean(m.deletedAt);
+  $("#lb-restore")?.classList.toggle("hidden", !isTrashed);
+  $("#lb-album")?.classList.toggle("hidden", isTrashed);
+  $("#lb-share")?.classList.toggle("hidden", isTrashed);
+  // Handler Share Link Sementara (24 Jam)
+  $("#lb-share")?.addEventListener("click", async () => {
+    const m = state.filteredMedia[state.lbIndex]; if (!m) return;
+    const hrsInput = prompt("Masa berlaku link (dalam jam, 1 - 168):", "24");
+    if (hrsInput === null) return;
+    try {
+      const r = await apiJson(`/api/media/${encodeURIComponent(m.id)}/share`, "POST", { hours: parseInt(hrsInput, 10) || 24 });
+      await navigator.clipboard.writeText(r.url).catch(() => {});
+      toast(`Link share (${r.expiresInHours} jam) disalin ke clipboard!`, "success", 5000);
+    } catch (e) { toast(e.message, "error"); }
+  });
+  
+  // Handler Pindah Album
+  $("#lb-album")?.addEventListener("click", async () => {
+    const m = state.filteredMedia[state.lbIndex]; if (!m) return;
+    const name = prompt("Masukkan nama album (kosongkan untuk mengeluarkan dari album):", m.album || "");
+    if (name === null) return;
+    try {
+      const clean = name.trim();
+      if (clean && !state.customAlbums.includes(clean)) state.customAlbums.push(clean);
+      await apiJson(`/api/media/${encodeURIComponent(m.id)}/album`, "POST", { album: clean });
+      toast(clean ? `Dipindahkan ke album "${clean}".` : "Dikeluarkan dari album.", "success");
+    } catch (e) { toast(e.message, "error"); }
+  });
+  
+  // Handler Restore dari Sampah
+  $("#lb-restore")?.addEventListener("click", async () => {
+    const m = state.filteredMedia[state.lbIndex]; if (!m) return;
+    try {
+      await apiJson(`/api/media/${encodeURIComponent(m.id)}/restore`, "POST");
+      toast(`"${m.name}" dipulihkan dari sampah.`, "success");
+      closeLightbox();
+    } catch (e) { toast(e.message, "error"); }
+  });
 
   const stage = $("#lb-stage");
   stage.innerHTML = `<div class="spinner"></div>`;
@@ -607,8 +736,9 @@ function sendChunk(form, onProgress) {
 async function uploadFileChunked(file, setProgress) {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   setProgress(0, "Menyiapkan upload…");
-  const { uploadId } = await apiJson("/api/upload/init", "POST", {
-    fileName: file.name, fileSize: file.size, mimeType: file.type, totalChunks, chunkSize: CHUNK_SIZE, lastModified: file.lastModified
+  const activeAlbum = state.galleryType !== "trash" && state.galleryAlbum !== "all" ? state.galleryAlbum : null;
+  await apiJson("/api/upload/complete", "POST", {
+    uploadId, fileName: file.name, fileSize: file.size, mimeType: file.type, totalChunks, album: activeAlbum, ...dims
   });
   if (!uploadId) throw new Error("Server tidak mengembalikan uploadId.");
 
