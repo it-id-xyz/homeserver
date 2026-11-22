@@ -190,3 +190,47 @@ h1{font-size:1.6rem;font-weight:800} h2{font-size:1.25rem;font-weight:700} h3{fo
   .dropzone{flex-direction:column;text-align:center}
   .conn span#conn-text{display:none}
 }
+
+/* ===== Sidebar Collapsible & Storage Quota ===== */
+.sidebar{transition:width .22s ease,padding .22s ease}
+.sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sidebar-quota{margin-top:auto;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+
+@media(min-width:901px){
+  .sidebar.collapsed{width:76px;padding:18px 12px;align-items:center}
+  .sidebar.collapsed .sb-text{display:none!important}
+  .sidebar.collapsed .sidebar-head{flex-direction:column;gap:12px}
+  .sidebar.collapsed .brand{justify-content:center;padding:0}
+  .sidebar.collapsed .nav{width:100%;align-items:center}
+  .sidebar.collapsed .nav-item{justify-content:center;padding:11px;width:46px;height:46px}
+  .sidebar.collapsed .sb-collapse-btn svg{transform:rotate(180deg)}
+}
+
+/* ===== Topbar Kanan: Search -> Akun -> Logout (jarak rapat 6px) ===== */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-right{display:flex;align-items:center;gap:6px;margin-left:auto}
+
+.search-box{display:flex;align-items:center;gap:6px;background:rgba(17,23,38,.78);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:6px 10px;width:210px;transition:width .2s,border-color .2s}
+.search-box:focus-within{width:250px;border-color:rgba(99,179,237,.5)}
+.search-box svg{width:15px;height:15px;opacity:.6;flex-shrink:0}
+.search-box input{background:none;border:none;outline:none;color:inherit;font:inherit;font-size:.85rem;width:100%}
+
+.top-account{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:4px 10px 4px 5px}
+.top-account .avatar{width:26px;height:26px;border-radius:50%}
+.top-account-name{font-size:.82rem;font-weight:600;max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+@media(max-width:640px){
+  .search-box{width:140px}
+  .search-box:focus-within{width:170px}
+  .top-account-name{display:none}
+  .top-account{padding:4px}
+}
+
+/* ===== Gallery Toolbar, Album & Trash ===== */
+.gallery-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:14px 0}
+.gallery-toolbar .seg button{display:inline-flex;align-items:center;gap:5px}
+.album-controls{display:flex;align-items:center;gap:6px}
+.input-select{background:rgba(17,23,38,.85);color:inherit;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 10px;font:inherit;font-size:.84rem;outline:none;cursor:pointer}
+.trash-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin-bottom:14px;border-color:rgba(248,113,113,.3)}
+.album-tag{position:absolute;left:8px;top:8px;background:rgba(15,23,42,.78);border:1px solid rgba(255,255,255,.12);border-radius:7px;padding:2px 7px;font-size:.68rem;max-width:75%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
