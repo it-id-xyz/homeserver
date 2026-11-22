@@ -65,18 +65,15 @@ h1{font-size:1.6rem;font-weight:800} h2{font-size:1.25rem;font-weight:700} h3{fo
 
 /* App layout */
 #view-app.active{display:flex}
-.sidebar{position:fixed;top:12px;left:12px;bottom:12px;width:var(--sidebar-w);padding:20px 14px;display:flex;flex-direction:column;gap:22px;z-index:20;transition:transform .3s}
+.sidebar{position:fixed;top:12px;left:12px;bottom:12px;width:var(--sidebar-w);padding:20px 14px;display:flex;flex-direction:column;gap:22px;z-index:20;transition:width .24s ease,padding .24s ease,transform .3s;overflow:hidden}
 .nav{display:flex;flex-direction:column;gap:6px;flex:1}
-.nav-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;color:var(--muted);font-weight:600;text-align:left;transition:.2s;position:relative}
-.nav-item i{width:19px;height:19px}
+.nav-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;color:var(--muted);font-weight:600;text-align:left;transition:.2s;position:relative;white-space:nowrap}
+.nav-item i{width:19px;height:19px;flex-shrink:0}
 .nav-item:hover{background:rgba(255,255,255,.06);color:var(--text)}
 .nav-item.active{background:linear-gradient(135deg,rgba(79,140,255,.22),rgba(139,92,246,.22));color:#fff;box-shadow:inset 0 0 0 1px rgba(139,92,246,.35)}
 .pill{margin-left:auto;font-style:normal;background:var(--warn);color:#111;font-size:.7rem;font-weight:800;padding:1px 8px;border-radius:99px}
-.sidebar-user{display:flex;align-items:center;gap:10px;padding-top:14px;border-top:1px solid var(--glass-b)}
-.user-meta{display:flex;flex-direction:column;min-width:0;flex:1}
-.user-meta strong,.user-meta span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sidebar-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:15;display:none}
-.main{margin-left:calc(var(--sidebar-w) + 24px);padding:20px 24px 60px;width:100%;min-width:0}
+.main{margin-left:calc(var(--sidebar-w) + 24px);padding:20px 24px 60px;width:100%;min-width:0;transition:margin-left .24s ease}
 .topbar{display:flex;align-items:center;gap:14px;margin-bottom:22px}
 .menu-btn{display:none}
 .conn{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted);padding:6px 12px;border-radius:99px;border:1px solid var(--glass-b);background:var(--glass)}
@@ -192,18 +189,19 @@ h1{font-size:1.6rem;font-weight:800} h2{font-size:1.25rem;font-weight:700} h3{fo
 }
 
 /* ===== Sidebar Collapsible & Storage Quota ===== */
-.sidebar{transition:width .22s ease,padding .22s ease}
-.sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.sidebar-quota{margin-top:auto;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+.sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:38px}
+.sidebar .brand{white-space:nowrap}
+.sidebar-quota{margin-top:auto;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);white-space:nowrap}
 
 @media(min-width:901px){
-  .sidebar.collapsed{width:76px;padding:18px 12px;align-items:center}
-  .sidebar.collapsed .sb-text{display:none!important}
-  .sidebar.collapsed .sidebar-head{flex-direction:column;gap:12px}
-  .sidebar.collapsed .brand{justify-content:center;padding:0}
+  .sidebar.collapsed{width:74px;padding:20px 12px;align-items:center;cursor:pointer}
+  .sidebar.collapsed ~ .main{margin-left:98px}
+  .sidebar.collapsed .sb-text,
+  .sidebar.collapsed .sb-collapse-btn{display:none!important}
+  .sidebar.collapsed .sidebar-head{justify-content:center;width:100%}
+  .sidebar.collapsed .brand{justify-content:center;padding:6px}
   .sidebar.collapsed .nav{width:100%;align-items:center}
-  .sidebar.collapsed .nav-item{justify-content:center;padding:11px;width:46px;height:46px}
-  .sidebar.collapsed .sb-collapse-btn svg{transform:rotate(180deg)}
+  .sidebar.collapsed .nav-item{justify-content:center;padding:0;width:46px;height:46px}
 }
 
 /* ===== Topbar Kanan: Search -> Akun -> Logout (jarak rapat 6px) ===== */
