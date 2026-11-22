@@ -8,9 +8,13 @@ import {
 /* ============================ Helpers ============================ */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const icons = () => window.lucide && window.lucide.createIcons();
+const icons = (root = document) => window.lucide && window.lucide.createIcons({ root });
 const esc = (s = "") => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+const img = new Image();
+img.decoding = "async";
+img.alt = "";
+img.src = url;
 
 function fmtBytes(b = 0) {
   if (b < 1024) return `${b} B`;
@@ -480,13 +484,6 @@ async function openLightbox(i) {
       el.src = url;
     }
 
-    // Preload foto berikutnya & sebelumnya di background biar geser-geser instan
-    [i + 1, i - 1].forEach(adj => {
-      const nextItem = state.media[adj];
-      if (nextItem && nextItem.type === "image") {
-        getSignedUrl(nextItem.id).then(u => { const pre = new Image(); pre.src = u; }).catch(() => {});
-      }
-    });
   } catch (e) { if (token === openLightbox.t) { stage.innerHTML = ""; toast(e.message, "error"); } }
 }
 openLightbox.t = 0;
