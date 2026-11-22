@@ -437,16 +437,102 @@ function listenMedia() {
   }, err => toast(`Gagal memuat galeri: ${err.message}`, "error")));
 }
 
-function updateAlbumOptions() {
-  const sel = $("#album-select"); if (!sel) return;
-  const set = new Set(state.customAlbums);
-  state.media.forEach(m => { if (!m.deletedAt && m.album) set.add(m.album); });
-  const current = state.galleryAlbum;
-  sel.innerHTML = `<option value="all">Semua Album</option>` +
-    [...set].sort().map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
-  sel.value = set.has(current) ? current : "all";
-  state.galleryAlbum = sel.value;
+function getAlbumCounts() {
+  const counts = new Map();
+  state.customAlbums.forEach(a => counts.set(a, 0));
+  let activeTotal = 0;
+  state.media.forEach(m => {
+    if (m.deletedAt) return;
+    activeTotal++;
+    if (m.album) counts.set(m.album, (counts.get(m.album) || 0) + 1);
+  });
+  return { counts, activeTotal };
 }
+
+function updateAlbumOptions() {
+  const menu = $("#album-dd-menu");
+  const label = $("#album-dd-label");
+  if (!menu || !label) return;
+
+  const { counts, activeTotal } = getAlbumCounts();
+  if (state.galleryAlbum !== "all" && !counts.has(state.galleryAlbum)) {
+    state.galleryAlbum = "all";
+  }
+
+  label.textContent = state.galleryAlbum === "all" ? "Semua Album" : state.galleryAlbum;
+
+  const sorted = [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  menu.innerHTML = [
+    `<button type="button" class="dd-item ${state.galleryAlbum === "all" ? "active" : ""}" data-alb="all">
+      <span class="dd-item-left"><i data-lucide="layers"></i><span>Semua Album</span></span>
+      <span class="dd-count">${activeTotal}</span>
+    </button>`,
+    ...sorted.map(([name, cnt]) => `
+      <button type="button" class="dd-item ${state.galleryAlbum === name ? "active" : ""}" data-alb="${esc(name)}">
+        <span class="dd-item-left"><i data-lucide="folder"></i><span>${esc(name)}</span></span>
+        <span class="dd-count">${cnt}</span>
+      </button>`)
+  ].join("");
+  icons(menu);
+}
+
+// Toggle & Pilih Custom Album Dropdown
+$("#album-dd-btn")?.addEventListener("click", e => {
+  e.stopPropagation();
+  const dd = $("#album-dd");
+  const menu = $("#album-dd-menu");
+  const willOpen = menu.classList.contains("hidden");
+  menu.classList.toggle("hidden", !willOpen);
+  dd.classList.toggle("open", willOpen);
+});
+
+$("#album-dd-menu")?.addEventListener("click", e => {
+  const item = e.target.closest(".dd-item[data-alb]");
+  if (!item) return;
+  state.galleryAlbum = item.dataset.alb;
+  $("#album-dd-menu").classList.add("hidden");
+  $("#album-dd").classList.remove("open");
+  renderGallery();
+});
+
+document.addEventListener("click", e => {
+  if (!e.target.closest("#album-dd")) {
+    $("#album-dd-menu")?.classList.add("hidden");
+    $("#album-dd")?.classList.remove("open");
+  }
+});
+
+// Modal Buat Album Baru
+const newAlbumModal = $("#modal-new-album");
+const newAlbumInput = $("#input-new-album");
+
+function closeNewAlbumModal() {
+  newAlbumModal?.classList.add("hidden");
+  if (newAlbumInput) newAlbumInput.value = "";
+}
+
+$("#btn-new-album")?.addEventListener("click", () => {
+  newAlbumInput.value = "";
+  newAlbumModal.classList.remove("hidden");
+  setTimeout(() => newAlbumInput.focus(), 40);
+});
+$("#cancel-new-album")?.addEventListener("click", closeNewAlbumModal);
+newAlbumModal?.addEventListener("click", e => { if (e.target === newAlbumModal) closeNewAlbumModal(); });
+
+function submitNewAlbum() {
+  const clean = newAlbumInput.value.trim().slice(0, 60);
+  if (!clean) { newAlbumInput.focus(); return; }
+  if (!state.customAlbums.includes(clean)) state.customAlbums.push(clean);
+  state.galleryAlbum = clean;
+  closeNewAlbumModal();
+  renderGallery();
+  toast(`Album "${clean}" aktif. Upload baru akan otomatis masuk ke album ini.`, "info", 4500);
+}
+$("#save-new-album")?.addEventListener("click", submitNewAlbum);
+newAlbumInput?.addEventListener("keydown", e => {
+  if (e.key === "Enter") submitNewAlbum();
+  if (e.key === "Escape") closeNewAlbumModal();
+});
 
 function renderGallery() {
   updateAlbumOptions();
@@ -625,33 +711,136 @@ $("#lb-prev").addEventListener("click", () => openLightbox(state.lbIndex - 1));
 $("#lb-next").addEventListener("click", () => openLightbox(state.lbIndex + 1));
 $("#lightbox").addEventListener("click", e => { if (e.target.id === "lb-stage") closeLightbox(); });
 document.addEventListener("keydown", e => {
-  if ($("#lightbox").classList.contains("hidden") || !$("#modal").classList.contains("hidden")) return;
+  if ($("#lightbox").classList.contains("hidden")) return;
+  const anyModalOpen = !$("#modal").classList.contains("hidden")
+    || !$("#modal-new-album").classList.contains("hidden")
+    || !$("#modal-move-album").classList.contains("hidden")
+    || !$("#modal-share").classList.contains("hidden");
+  if (anyModalOpen) {
+    if (e.key === "Escape") { closeNewAlbumModal(); closeMoveAlbumModal(); closeShareModal(); }
+    return;
+  }
   if (e.key === "Escape") closeLightbox();
   if (e.key === "ArrowLeft" && state.lbIndex > 0) openLightbox(state.lbIndex - 1);
   if (e.key === "ArrowRight" && state.lbIndex < state.filteredMedia.length - 1) openLightbox(state.lbIndex + 1);
 });
 
-$("#lb-share")?.addEventListener("click", async () => {
+// ===== Modal Share Link Sementara =====
+const shareModal = $("#modal-share");
+let selectedShareHours = 24;
+
+function closeShareModal() {
+  shareModal?.classList.add("hidden");
+  $("#share-result-box")?.classList.add("hidden");
+  if ($("#share-url-input")) $("#share-url-input").value = "";
+}
+
+$("#lb-share")?.addEventListener("click", () => {
   const m = state.filteredMedia[state.lbIndex]; if (!m) return;
-  const hrsInput = prompt("Masa berlaku link (dalam jam, 1 - 168):", "24");
-  if (hrsInput === null) return;
-  try {
-    const r = await apiJson(`/api/media/${encodeURIComponent(m.id)}/share`, "POST", { hours: parseInt(hrsInput, 10) || 24 });
-    await navigator.clipboard.writeText(r.url).catch(() => {});
-    toast(`Link share (${r.expiresInHours} jam) disalin ke clipboard!`, "success", 5000);
-  } catch (e) { toast(e.message, "error"); }
+  $("#share-file-name").textContent = m.name;
+  $("#share-result-box").classList.add("hidden");
+  $("#share-url-input").value = "";
+  selectedShareHours = 24;
+  $$("#share-presets .preset-btn").forEach(b => b.classList.toggle("active", b.dataset.hrs === "24"));
+  shareModal.classList.remove("hidden");
 });
 
-$("#lb-album")?.addEventListener("click", async () => {
+$("#share-presets")?.addEventListener("click", e => {
+  const b = e.target.closest(".preset-btn[data-hrs]"); if (!b) return;
+  selectedShareHours = parseInt(b.dataset.hrs, 10) || 24;
+  $$("#share-presets .preset-btn").forEach(x => x.classList.toggle("active", x === b));
+});
+
+$("#btn-generate-share")?.addEventListener("click", async () => {
   const m = state.filteredMedia[state.lbIndex]; if (!m) return;
-  const name = prompt("Masukkan nama album (kosongkan untuk mengeluarkan dari album):", m.album || "");
-  if (name === null) return;
+  const btn = $("#btn-generate-share");
+  btn.disabled = true;
   try {
-    const clean = name.trim();
-    if (clean && !state.customAlbums.includes(clean)) state.customAlbums.push(clean);
-    await apiJson(`/api/media/${encodeURIComponent(m.id)}/album`, "POST", { album: clean });
-    toast(clean ? `Dipindahkan ke album "${clean}".` : "Dikeluarkan dari album.", "success");
-  } catch (e) { toast(e.message, "error"); }
+    const r = await apiJson(`/api/media/${encodeURIComponent(m.id)}/share`, "POST", { hours: selectedShareHours });
+    $("#share-url-input").value = r.url;
+    $("#share-result-box").classList.remove("hidden");
+    await navigator.clipboard.writeText(r.url).catch(() => {});
+    toast(`Link (${r.expiresInHours} jam) dibuat & disalin ke clipboard!`, "success");
+  } catch (e) {
+    toast(e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#btn-copy-share")?.addEventListener("click", async () => {
+  const val = $("#share-url-input")?.value;
+  if (!val) return;
+  $("#share-url-input").select();
+  await navigator.clipboard.writeText(val).catch(() => {});
+  toast("Link disalin ke clipboard!", "success", 2500);
+});
+
+$("#close-share-modal")?.addEventListener("click", closeShareModal);
+shareModal?.addEventListener("click", e => { if (e.target === shareModal) closeShareModal(); });
+
+// ===== Modal Pindah / Pilih Album (pakai Select) =====
+const moveAlbumModal = $("#modal-move-album");
+const moveAlbumSelect = $("#select-move-album");
+const moveNewWrap = $("#move-new-album-wrap");
+const moveNewInput = $("#input-move-new-album");
+
+function closeMoveAlbumModal() {
+  moveAlbumModal?.classList.add("hidden");
+  moveNewWrap?.classList.add("hidden");
+  if (moveNewInput) moveNewInput.value = "";
+}
+
+$("#lb-album")?.addEventListener("click", () => {
+  const m = state.filteredMedia[state.lbIndex]; if (!m) return;
+  $("#move-album-sub").textContent = m.name;
+
+  const { counts } = getAlbumCounts();
+  const albums = [...counts.keys()].sort((a, b) => a.localeCompare(b));
+
+  moveAlbumSelect.innerHTML =
+    `<option value="">— Tanpa Album (Keluarkan) —</option>` +
+    albums.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("") +
+    `<option value="__NEW__">+ Buat album baru…</option>`;
+
+  moveAlbumSelect.value = m.album && albums.includes(m.album) ? m.album : "";
+  moveNewWrap.classList.add("hidden");
+  moveNewInput.value = "";
+  moveAlbumModal.classList.remove("hidden");
+});
+
+moveAlbumSelect?.addEventListener("change", () => {
+  const isNew = moveAlbumSelect.value === "__NEW__";
+  moveNewWrap.classList.toggle("hidden", !isNew);
+  if (isNew) setTimeout(() => moveNewInput.focus(), 40);
+});
+
+$("#cancel-move-album")?.addEventListener("click", closeMoveAlbumModal);
+moveAlbumModal?.addEventListener("click", e => { if (e.target === moveAlbumModal) closeMoveAlbumModal(); });
+
+$("#save-move-album")?.addEventListener("click", async () => {
+  const m = state.filteredMedia[state.lbIndex]; if (!m) return;
+  const chosen = moveAlbumSelect.value === "__NEW__"
+    ? moveNewInput.value.trim().slice(0, 60)
+    : moveAlbumSelect.value.trim();
+
+  if (moveAlbumSelect.value === "__NEW__" && !chosen) {
+    moveNewInput.focus();
+    return;
+  }
+
+  const btn = $("#save-move-album");
+  btn.disabled = true;
+  try {
+    if (chosen && !state.customAlbums.includes(chosen)) state.customAlbums.push(chosen);
+    await apiJson(`/api/media/${encodeURIComponent(m.id)}/album`, "POST", { album: chosen });
+    toast(chosen ? `Dipindahkan ke album "${chosen}".` : "Dikeluarkan dari album.", "success");
+    closeMoveAlbumModal();
+  } catch (e) {
+    toast(e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 $("#lb-restore")?.addEventListener("click", async () => {
