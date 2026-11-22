@@ -233,13 +233,11 @@ h1{font-size:1.6rem;font-weight:800} h2{font-size:1.25rem;font-weight:700} h3{fo
   /* Toolbar Galeri */
   .gallery-toolbar{flex-direction:column;align-items:stretch;gap:8px}
   .album-controls{width:100%}
-  .input-select{flex:1;min-width:0}
 
   .gallery-toolbar{flex-direction:column;align-items:stretch;gap:8px}
   .gallery-toolbar .seg{width:100%;flex-wrap:wrap}
   .gallery-toolbar .seg button{flex:1 1 auto;justify-content:center;padding:7px 8px;font-size:.78rem}
   .album-controls{width:100%}
-  .input-select{flex:1;min-width:0}
   .trash-banner{flex-direction:column;align-items:flex-start}
 
   /* Topbar Mobile: Hamburger + Dot Status (tanpa teks) */
@@ -271,3 +269,84 @@ h1{font-size:1.6rem;font-weight:800} h2{font-size:1.25rem;font-weight:700} h3{fo
 .input-select{background:rgba(17,23,38,.85);color:inherit;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 10px;font:inherit;font-size:.84rem;outline:none;cursor:pointer}
 .trash-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin-bottom:14px;border-color:rgba(248,113,113,.3)}
 .album-tag{position:absolute;left:8px;top:8px;background:rgba(15,23,42,.78);border:1px solid rgba(255,255,255,.12);border-radius:7px;padding:2px 7px;font-size:.68rem;max-width:75%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ===== Custom Album Dropdown & Glass Modals ===== */
+.custom-dd{position:relative}
+.custom-dd-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(17,23,38,.85);border:1px solid rgba(255,255,255,.12);
+  border-radius:10px;padding:7px 12px;font-size:.84rem;font-weight:600;
+  color:var(--text);transition:.2s;max-width:210px
+}
+.custom-dd-btn:hover{border-color:rgba(34,211,238,.45);background:rgba(255,255,255,.07)}
+.custom-dd-btn i{width:15px;height:15px;color:var(--cyan);flex-shrink:0}
+.custom-dd-btn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.custom-dd-btn .dd-caret{color:var(--muted);margin-left:auto;transition:transform .2s}
+.custom-dd.open .dd-caret{transform:rotate(180deg)}
+
+.custom-dd-menu{
+  position:absolute;top:calc(100% + 6px);right:0;min-width:220px;max-width:270px;
+  max-height:280px;overflow-y:auto;padding:6px;z-index:60;
+  background:rgba(15,21,36,.96);border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 16px 40px rgba(0,0,0,.55);animation:fade .15s ease
+}
+.dd-item{
+  width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 10px;border-radius:9px;font-size:.83rem;text-align:left;color:var(--text);transition:.15s
+}
+.dd-item:hover{background:rgba(255,255,255,.08)}
+.dd-item.active{background:linear-gradient(135deg,rgba(79,140,255,.22),rgba(139,92,246,.22));color:#fff;font-weight:600}
+.dd-item-left{display:flex;align-items:center;gap:8px;min-width:0}
+.dd-item-left i{width:14px;height:14px;color:var(--cyan);flex-shrink:0}
+.dd-item-left span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dd-count{font-size:.72rem;color:var(--muted);background:rgba(255,255,255,.06);padding:1px 7px;border-radius:99px;flex-shrink:0}
+
+/* Form & Modal Elements */
+.modal-head{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.modal-ico{
+  width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;
+  background:linear-gradient(135deg,rgba(79,140,255,.2),rgba(139,92,246,.2));
+  border:1px solid rgba(139,92,246,.35);color:var(--cyan)
+}
+.modal-ico i{width:19px;height:19px}
+.field-group{display:flex;flex-direction:column;gap:6px}
+
+.glass-input{
+  width:100%;background:rgba(9,13,22,.75);border:1px solid rgba(255,255,255,.14);
+  border-radius:11px;padding:10px 13px;color:var(--text);font:inherit;font-size:.88rem;
+  outline:none;transition:border-color .2s,box-shadow .2s
+}
+.glass-input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(34,211,238,.14)}
+
+.select-wrap{position:relative;display:flex;align-items:center}
+.select-wrap i{position:absolute;right:12px;width:16px;height:16px;color:var(--muted);pointer-events:none}
+.glass-select{
+  width:100%;appearance:none;-webkit-appearance:none;
+  background:rgba(9,13,22,.85);border:1px solid rgba(255,255,255,.14);
+  border-radius:11px;padding:10px 36px 10px 13px;color:var(--text);font:inherit;font-size:.88rem;
+  outline:none;cursor:pointer;transition:border-color .2s
+}
+.glass-select:focus{border-color:var(--cyan)}
+.glass-select option{background:#111726;color:#e8ecf5}
+
+/* Share Presets & Link Box */
+.preset-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.preset-btn{
+  padding:8px 4px;border-radius:10px;font-size:.78rem;font-weight:600;text-align:center;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--muted);transition:.18s
+}
+.preset-btn:hover{background:rgba(255,255,255,.1);color:var(--text)}
+.preset-btn.active{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(79,140,255,.3)}
+
+.share-result{
+  display:flex;align-items:center;gap:6px;padding:6px;border-radius:12px;
+  background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3)
+}
+.share-result .glass-input{padding:7px 10px;font-size:.8rem;border:none;background:transparent;box-shadow:none}
+.share-result .btn{flex-shrink:0}
+
+@media(max-width:768px){
+  .custom-dd{flex:1;min-width:0}
+  .custom-dd-btn{width:100%;max-width:none}
+  .custom-dd-menu{left:0;right:auto;width:100%;max-width:none}
+  .preset-grid{grid-template-columns:repeat(3,1fr)}
+}
