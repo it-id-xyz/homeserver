@@ -225,6 +225,32 @@ $("#global-search")?.addEventListener("input", e => {
   if (state.searchQuery && state.tab !== "gallery") switchTab("gallery");
   renderGallery();
 });
+const topbarEl = $(".topbar");
+const searchBoxEl = $(".search-box");
+const searchInputEl = $("#global-search");
+
+searchBoxEl?.addEventListener("click", () => {
+  if (window.innerWidth <= 768 && !topbarEl.classList.contains("search-open")) {
+    topbarEl.classList.add("search-open");
+    searchInputEl?.focus();
+  }
+});
+
+searchInputEl?.addEventListener("blur", () => {
+  if (window.innerWidth <= 768 && !searchInputEl.value.trim()) {
+    topbarEl.classList.remove("search-open");
+  }
+});
+
+searchInputEl?.addEventListener("keydown", e => {
+  if (e.key === "Escape" && window.innerWidth <= 768) {
+    searchInputEl.value = "";
+    state.searchQuery = "";
+    renderGallery();
+    topbarEl.classList.remove("search-open");
+    searchInputEl.blur();
+  }
+});
 /* ============================ Tab 1: Server Monitoring ============================ */
 /* Telemetry langsung dari backend (0 Firestore write). Payload GET /api/metrics & SSE:
    cpuUsage, cpuModel, cpuTemp, cpuTempAvailable, ramUsedGB, ramTotalGB, diskUsedGB, diskTotalGB,
@@ -749,7 +775,11 @@ async function uploadFileChunked(file, setProgress) {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   setProgress(0, "Menyiapkan upload…");
   const { uploadId } = await apiJson("/api/upload/init", "POST", {
-    fileName: file.name, fileSize: file.size, mimeType: file.type, totalChunks
+    fileName: file.name,
+    fileSize: file.size,
+    mimeType: file.type,
+    chunkSize: CHUNK_SIZE,
+    totalChunks
   });
   if (!uploadId) throw new Error("Server tidak mengembalikan uploadId.");
 
