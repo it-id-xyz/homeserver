@@ -55,24 +55,60 @@
   <section id="view-app" class="view">
     <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
     <aside id="sidebar" class="sidebar glass">
-      <div class="brand"><i data-lucide="cloud"></i><span>HomeCloud</span></div>
+      <div class="sidebar-head">
+        <div class="brand" title="HomeCloud">
+          <i data-lucide="cloud"></i>
+          <span class="sb-text">HomeCloud</span>
+        </div>
+        <button id="btn-collapse" class="icon-btn sb-collapse-btn" title="Perkecil / Perbesar Sidebar">
+          <i data-lucide="panel-left-close"></i>
+        </button>
+      </div>
+
       <nav class="nav">
-        <button class="nav-item active" data-tab="monitor"><i data-lucide="activity"></i><span>Server Monitoring</span></button>
-        <button class="nav-item" data-tab="gallery"><i data-lucide="images"></i><span>Cloud Gallery</span></button>
-        <button class="nav-item admin-only hidden" data-tab="admin"><i data-lucide="shield-check"></i><span>Admin Panel</span><em id="admin-pending-count" class="pill hidden">0</em></button>
+        <button class="nav-item active" data-tab="monitor" title="Server Monitoring">
+          <i data-lucide="activity"></i><span class="sb-text">Server Monitoring</span>
+        </button>
+        <button class="nav-item" data-tab="gallery" title="Cloud Gallery">
+          <i data-lucide="images"></i><span class="sb-text">Cloud Gallery</span>
+        </button>
+        <button class="nav-item admin-only hidden" data-tab="admin" title="Admin Panel">
+          <i data-lucide="shield-check"></i><span class="sb-text">Admin Panel</span>
+          <em id="admin-pending-count" class="pill sb-text hidden">0</em>
+        </button>
       </nav>
-      <div class="sidebar-user">
-        <img id="user-photo" class="avatar" alt="" referrerpolicy="no-referrer" />
-        <div class="user-meta"><strong id="user-name">-</strong><span id="user-email" class="muted small">-</span></div>
-        <button class="icon-btn btn-logout" title="Logout"><i data-lucide="log-out"></i></button>
+
+      <!-- Total Penyimpanan di dalam Sidebar (hilang saat sidebar di-minimize) -->
+      <div class="sidebar-quota sb-text">
+        <div class="quota-row">
+          <span class="muted small">Penyimpanan</span>
+          <span id="quota-pct" class="small">0%</span>
+        </div>
+        <div class="bar thick"><i id="quota-bar"></i></div>
+        <div id="quota-text" class="muted small" style="margin-top:6px">0 B / 60 GB digunakan</div>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
-        <button id="btn-menu" class="icon-btn menu-btn" aria-label="Menu"><i data-lucide="menu"></i></button>
-        <h2 id="page-title">Server Monitoring</h2>
-        <div id="conn-status" class="conn"><span class="dot"></span><span id="conn-text">Menghubungkan…</span></div>
+        <div class="topbar-left">
+          <button id="btn-menu" class="icon-btn menu-btn" aria-label="Menu"><i data-lucide="menu"></i></button>
+          <h2 id="page-title">Server Monitoring</h2>
+          <div id="conn-status" class="conn"><span class="dot"></span><span id="conn-text">Menghubungkan…</span></div>
+        </div>
+
+        <!-- Urutan Kanan Atas: Kiri Search -> Tengah Akun -> Paling Kanan Logout (jarak rapat) -->
+        <div class="topbar-right">
+          <div class="search-box">
+            <i data-lucide="search"></i>
+            <input id="global-search" type="search" placeholder="Cari foto, video, album…" autocomplete="off" />
+          </div>
+          <div class="top-account" title="Akun Aktif">
+            <img id="user-photo" class="avatar" alt="" referrerpolicy="no-referrer" />
+            <span id="user-name" class="top-account-name">-</span>
+          </div>
+          <button class="icon-btn btn-logout" title="Logout"><i data-lucide="log-out"></i></button>
+        </div>
       </header>
 
       <!-- TAB MONITOR -->
@@ -124,11 +160,7 @@
 
       <!-- TAB GALLERY -->
       <div id="tab-gallery" class="tab">
-        <div class="glass quota">
-          <div class="quota-row"><strong id="quota-text">0 B / 60 GB digunakan</strong><span id="quota-pct" class="muted">0%</span></div>
-          <div class="bar thick"><i id="quota-bar"></i></div>
-        </div>
-
+        <!-- Dropzone tetap di sini -->
         <div id="dropzone" class="glass dropzone" tabindex="0">
           <i data-lucide="upload-cloud"></i>
           <div><strong>Tarik &amp; lepas file di sini</strong><span class="muted small">atau klik untuk memilih foto / video (upload per 5 MB)</span></div>
@@ -136,7 +168,30 @@
         </div>
         <div id="upload-list" class="upload-list"></div>
 
-        <div id="gallery-empty" class="glass empty hidden"><i data-lucide="image-off"></i><p>Belum ada foto atau video. Mulai unggah file pertama Anda.</p></div>
+        <!-- Filter Tipe, Album & Sampah -->
+        <div class="gallery-toolbar">
+          <div class="seg" id="gallery-type-filter">
+            <button class="active" data-gt="all">Semua</button>
+            <button data-gt="image">Foto</button>
+            <button data-gt="video">Video</button>
+            <button data-gt="trash"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Sampah <span id="trash-badge"></span></button>
+          </div>
+
+          <div class="album-controls" id="album-controls">
+            <select id="album-select" class="input-select" title="Filter Album">
+              <option value="all">Semua Album</option>
+            </select>
+            <button id="btn-new-album" class="btn btn-sm btn-ghost" title="Buat Album Baru"><i data-lucide="folder-plus"></i> Album</button>
+          </div>
+        </div>
+
+        <!-- Banner khusus saat membuka Sampah -->
+        <div id="trash-banner" class="glass trash-banner hidden">
+          <span class="muted small"><i data-lucide="info" style="width:15px;height:15px;vertical-align:-3px"></i> File di sampah otomatis terhapus permanen setelah 7 hari.</span>
+          <button id="btn-empty-trash" class="btn btn-sm btn-danger">Kosongkan Sampah</button>
+        </div>
+
+        <div id="gallery-empty" class="glass empty hidden"><i data-lucide="image-off"></i><p id="gallery-empty-text">Belum ada foto atau video. Mulai unggah file pertama Anda.</p></div>
         <div id="gallery-groups"></div>
       </div>
 
@@ -178,13 +233,16 @@
         </div>
       </div>
     </main>
-  </div>
+  </section>
 
   <!-- Lightbox -->
   <div id="lightbox" class="lightbox hidden" role="dialog" aria-modal="true">
     <div class="lb-bar">
       <div><strong id="lb-name">-</strong><div id="lb-meta" class="muted small">-</div></div>
       <div class="lb-actions">
+        <button id="lb-restore" class="icon-btn hidden" title="Pulihkan dari Sampah"><i data-lucide="rotate-ccw"></i></button>
+        <button id="lb-album" class="icon-btn" title="Masukkan ke Album"><i data-lucide="folder"></i></button>
+        <button id="lb-share" class="icon-btn" title="Bagikan Link Sementara"><i data-lucide="share-2"></i></button>
         <button id="lb-download" class="icon-btn" title="Download"><i data-lucide="download"></i></button>
         <button id="lb-delete" class="icon-btn danger" title="Hapus"><i data-lucide="trash-2"></i></button>
         <button id="lb-close" class="icon-btn" title="Tutup"><i data-lucide="x"></i></button>
@@ -194,7 +252,6 @@
     <div id="lb-stage" class="lb-stage"></div>
     <button id="lb-next" class="icon-btn lb-nav right"><i data-lucide="chevron-right"></i></button>
   </div>
-
   <!-- Confirm modal -->
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="glass modal-card">
