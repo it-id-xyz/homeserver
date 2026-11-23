@@ -603,21 +603,6 @@ $("#gallery-type-filter")?.addEventListener("click", e => {
   renderGallery();
 });
 
-// Pilih Album & Buat Album Baru
-$("#album-select")?.addEventListener("change", e => {
-  state.galleryAlbum = e.target.value;
-  renderGallery();
-});
-$("#btn-new-album")?.addEventListener("click", () => {
-  const name = prompt("Nama album baru:");
-  if (!name || !name.trim()) return;
-  const clean = name.trim().slice(0, 60);
-  if (!state.customAlbums.includes(clean)) state.customAlbums.push(clean);
-  state.galleryAlbum = clean;
-  renderGallery();
-  toast(`Album "${clean}" aktif. File yang di-upload sekarang otomatis masuk ke album ini.`, "info", 5000);
-});
-
 // Kosongkan Sampah
 $("#btn-empty-trash")?.addEventListener("click", async () => {
   if (!await confirmModal("Kosongkan Sampah?", "Semua file di sampah akan dihapus permanen dan tidak bisa dikembalikan.", "Kosongkan", true)) return;
