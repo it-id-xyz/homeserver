@@ -8,7 +8,11 @@ import {
 /* ============================ Helpers ============================ */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const icons = () => window.lucide && window.lucide.createIcons();
+const icons = (root = document) => {
+  if (!window.lucide) return;
+  const targets = root instanceof Element ? root.querySelectorAll("[data-lucide]") : document.querySelectorAll("[data-lucide]");
+  if (targets.length) window.lucide.createIcons({ attrs: {}, nameAttr: "data-lucide", root });
+};
 const esc = (s = "") => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 
@@ -34,13 +38,13 @@ function dayLabel(d) {
 }
 
 /* ============================ Toast ============================ */
-function toast(message, type = "info", ms = 4500) {
+function toast(message, type = "info", ms = 4000) {
   const ic = { success: "check-circle-2", error: "alert-octagon", warn: "alert-triangle", info: "info" }[type] || "info";
   const el = document.createElement("div");
   el.className = `toast ${type}`;
   el.innerHTML = `<i data-lucide="${ic}"></i><span>${esc(message)}</span>`;
-  $("#toasts").appendChild(el); icons();
-  const close = () => { el.classList.add("out"); setTimeout(() => el.remove(), 300); };
+  $("#toasts").appendChild(el); icons(el);
+  const close = () => { el.classList.add("out"); setTimeout(() => el.remove(), 260); };
   el.addEventListener("click", close); setTimeout(close, ms);
 }
 
@@ -59,7 +63,7 @@ function confirmModal(title, desc, okLabel = "Ya, lanjutkan", danger = false) {
   });
 }
 
-/* ============================ API (Cloudflare Tunnel) ============================ */
+/* ============================ API ============================ */
 async function getToken(force = false) {
   if (!auth.currentUser) throw new Error("Belum login");
   return auth.currentUser.getIdToken(force);
@@ -71,8 +75,8 @@ async function apiFetch(path, options = {}, retryAuth = true) {
   let res;
   try {
     res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
-  } catch (err) {
-    throw new ApiError("Tidak dapat terhubung ke home server (Cloudflare Tunnel). Periksa koneksi atau status server.", 0, true);
+  } catch {
+    throw new ApiError("Tidak dapat terhubung ke home server. Periksa koneksi atau status server.", 0, true);
   }
   if (res.status === 401 && retryAuth) { await getToken(true); return apiFetch(path, options, false); }
   if (!res.ok) {
@@ -99,7 +103,7 @@ const state = {
   user: null, profile: null, tab: "monitor",
   unsubs: [], media: [], filteredMedia: [], lbIndex: -1,
   galleryType: "all", galleryAlbum: "all", searchQuery: "", customAlbums: [],
-  adminUsers: [], adminFilter: "all",
+  adminUsers: [], adminFilter: "all", adminLogs: [], logFilter: "all",
   uploadQueue: [], uploading: false, reservedBytes: 0
 };
 const TITLES = { monitor: "Server Monitoring", gallery: "Cloud Gallery", admin: "Admin Panel" };
@@ -134,7 +138,6 @@ onAuthStateChanged(auth, async user => {
         storageLimit: STORAGE_LIMIT_BYTES, storageUsed: 0, createdAt: serverTimestamp()
       });
     }
-    // Realtime: perubahan status/kuota langsung terlihat tanpa reload
     state.unsubs.push(onSnapshot(ref, s => { if (s.exists()) { state.profile = s.data(); renderByProfile(); } },
       err => toast(`Gagal membaca profil: ${err.message}`, "error")));
   } catch (e) {
@@ -162,7 +165,6 @@ function renderByProfile() {
     const b = $("#pending-badge"); b.textContent = p.status; b.className = `badge badge-${rejected ? "rejected" : "pending"}`;
     showView("view-pending"); return;
   }
-  // Approved
   if ($("#user-photo")) $("#user-photo").src = p.photoURL || u.photoURL || "";
   if ($("#user-name")) $("#user-name").textContent = p.displayName || "-";
   if ($("#user-email")) $("#user-email").textContent = p.email || "-";
@@ -177,18 +179,17 @@ function startApp(isAdmin) {
   appStarted = true; startedUid = state.user.uid;
   listenMedia();
   if (isAdmin) listenAdmin();
-  switchTab(state.tab === "admin" && !isAdmin ? "monitor" : state.tab); // juga menjalankan syncTelemetry()
+  switchTab(state.tab === "admin" && !isAdmin ? "monitor" : state.tab);
 }
 function stopApp() {
   appStarted = false; startedUid = null;
   stopTelemetry();
-  // Pertahankan listener profil (index 0), hentikan sisanya
   state.unsubs.slice(1).forEach(u => u()); state.unsubs = state.unsubs.slice(0, 1);
   state.media = []; state.adminUsers = [];
   closeLightbox();
 }
 
-/* ============================ Tabs / Sidebar ============================ */
+/* ============================ Tabs / Sidebar / Topbar ============================ */
 function switchTab(tab) {
   if (tab === "admin" && state.profile?.role !== "admin") tab = "monitor";
   state.tab = tab;
@@ -205,7 +206,8 @@ const openSidebar = () => { $("#sidebar").classList.add("open"); $("#sidebar-bac
 const closeSidebar = () => { $("#sidebar").classList.remove("open"); $("#sidebar-backdrop").classList.remove("show"); };
 $("#btn-menu").addEventListener("click", openSidebar);
 $("#sidebar-backdrop").addEventListener("click", closeSidebar);
-// Minimize / Maximize Sidebar (simpan preferensi di localStorage)
+
+// Sidebar: default minimize; klik sidebar/ikon otomatis maximize
 const sidebarEl = $("#sidebar");
 sidebarEl?.classList.add("collapsed");
 sidebarEl?.addEventListener("click", e => {
@@ -219,15 +221,16 @@ sidebarEl?.addEventListener("click", e => {
   }
 });
 
-// Search di Topbar (otomatis pindah ke tab Galeri jika user mengetik pencarian)
-$("#global-search")?.addEventListener("input", e => {
+// Search di Topbar
+const topbarEl = $(".topbar");
+const searchBoxEl = $(".search-box");
+const searchInputEl = $("#global-search");
+
+searchInputEl?.addEventListener("input", e => {
   state.searchQuery = e.target.value.trim().toLowerCase();
   if (state.searchQuery && state.tab !== "gallery") switchTab("gallery");
   renderGallery();
 });
-const topbarEl = $(".topbar");
-const searchBoxEl = $(".search-box");
-const searchInputEl = $("#global-search");
 
 searchBoxEl?.addEventListener("click", () => {
   if (window.innerWidth <= 768 && !topbarEl.classList.contains("search-open")) {
@@ -251,20 +254,18 @@ searchInputEl?.addEventListener("keydown", e => {
     searchInputEl.blur();
   }
 });
+
 /* ============================ Tab 1: Server Monitoring ============================ */
-/* Telemetry langsung dari backend (0 Firestore write). Payload GET /api/metrics & SSE:
-   cpuUsage, cpuModel, cpuTemp, cpuTempAvailable, ramUsedGB, ramTotalGB, diskUsedGB, diskTotalGB,
-   diskHealth ("good"|"warning"|"critical"), networkUptimeSec, networkOnline, updatedAt (ISO string) */
 const TELEMETRY = {
-  POLL_MS: 3500,          // interval polling fallback
-  SSE_RETRY_MS: 60000,    // selama polling, coba SSE lagi tiap 60 dtk
-  STALE_MS: 15000,        // tanpa data baru selama ini -> Offline
+  POLL_MS: 3500,
+  SSE_RETRY_MS: 60000,
+  STALE_MS: 15000,
   WATCHDOG_MS: 3000,
-  MAX_SSE_FAILURES: 3     // gagal beruntun sebelum pindah ke polling
+  MAX_SSE_FAILURES: 3
 };
 const tm = {
   running: false, gen: 0, mode: null, abort: null,
-  pollTimer: null, sseRetryTimer: null, sseRetryDelay: null, watchdog: null,
+  pollTimer: null, sseRetryTimer: null, watchdog: null,
   sseFailures: 0, startedAt: 0, lastDataAt: 0, lastMetrics: null, forceRefreshToken: false
 };
 
@@ -284,7 +285,7 @@ function renderMetrics(m) {
   const dU = +m.diskUsedGB || 0, dT = +m.diskTotalGB || 0;
   setMetric("m-cpu", { value: cpu.toFixed(1), pct: cpu, level: lvl(cpu, 70, 90), sub: m.cpuModel || "" });
   setMetric("m-ram", { value: `${ramU.toFixed(1)} / ${ramT.toFixed(1)}`, pct: ramT ? ramU / ramT * 100 : 0, level: lvl(ramT ? ramU / ramT * 100 : 0, 75, 90), sub: ramT ? `${(ramU / ramT * 100).toFixed(0)}% terpakai` : "" });
-  if (m.cpuTempAvailable === false) setMetric("m-temp", { value: "N/A", pct: 0, sub: "Sensor suhu tidak tersedia (butuh hak Administrator)" });
+  if (m.cpuTempAvailable === false) setMetric("m-temp", { value: "N/A", pct: 0, sub: "Sensor suhu tidak tersedia" });
   else setMetric("m-temp", { value: temp.toFixed(0), pct: temp, level: lvl(temp, 65, 80), sub: temp >= 80 ? "Terlalu panas!" : temp >= 65 ? "Hangat" : "Normal" });
   const health = { good: "Sehat", warning: "Perlu perhatian", critical: "Kritis" }[m.diskHealth] || "—";
   setMetric("m-disk", { value: `${dU.toFixed(0)} / ${dT.toFixed(0)}`, pct: dT ? dU / dT * 100 : 0, level: m.diskHealth === "critical" ? "bad" : m.diskHealth === "warning" ? "warn" : lvl(dT ? dU / dT * 100 : 0, 80, 92), sub: `Kesehatan disk: ${health}` });
@@ -292,7 +293,7 @@ function renderMetrics(m) {
 }
 
 function onMetrics(m, gen) {
-  if (gen !== tm.gen) return; // data usang dari koneksi lama
+  if (gen !== tm.gen) return;
   tm.lastDataAt = Date.now(); tm.lastMetrics = m;
   renderMetrics(m);
   const label = tm.mode === "sse" ? "SSE" : "Polling";
@@ -301,7 +302,6 @@ function onMetrics(m, gen) {
   setConn("online", `Server online (${label})`);
 }
 
-/* ---- Mode utama: Authenticated SSE via fetch + ReadableStream ---- */
 async function startSSE(gen) {
   if (gen !== tm.gen) return;
   tm.mode = "sse";
@@ -329,22 +329,21 @@ async function startSSE(gen) {
         const block = buf.slice(0, idx); buf = buf.slice(idx + 2);
         if (/^event:\s*error/m.test(block)) continue;
         const data = block.split("\n").filter(l => l.startsWith("data:")).map(l => l.slice(5).trimStart()).join("\n");
-        if (!data) continue; // komentar / heartbeat
-        try { const m = JSON.parse(data); gotData = true; tm.sseFailures = 0; onMetrics(m, gen); } catch { /* abaikan baris rusak */ }
+        if (!data) continue;
+        try { const m = JSON.parse(data); gotData = true; tm.sseFailures = 0; onMetrics(m, gen); } catch {}
       }
     }
     throw new Error("Stream ditutup server");
   } catch (err) {
-    if (gen !== tm.gen) return; // dihentikan sengaja (pindah tab / hidden / logout)
+    if (gen !== tm.gen) return;
     tm.sseFailures = gotData ? 1 : tm.sseFailures + 1;
     if (err.fatal || tm.sseFailures >= TELEMETRY.MAX_SSE_FAILURES) return startPolling(gen);
     setConn("offline", "Menyambung ulang…");
     const wait = Math.min(1000 * tm.sseFailures, 5000);
-    tm.pollTimer = setTimeout(() => startSSE(gen), wait); // dipakai ulang sebagai timer retry
+    tm.pollTimer = setTimeout(() => startSSE(gen), wait);
   }
 }
 
-/* ---- Mode cadangan: HTTP polling ---- */
 function startPolling(gen) {
   if (gen !== tm.gen) return;
   tm.mode = "poll"; tm.abort?.abort(); tm.abort = null;
@@ -362,12 +361,11 @@ function startPolling(gen) {
     if (gen === tm.gen && tm.mode === "poll") tm.pollTimer = setTimeout(tick, TELEMETRY.POLL_MS);
   };
   tick();
-  // Coba kembali ke SSE secara berkala
   clearTimeout(tm.sseRetryTimer);
   tm.sseRetryTimer = setTimeout(() => {
     if (gen !== tm.gen || tm.mode !== "poll") return;
     clearTimeout(tm.pollTimer); tm.abort?.abort();
-    tm.sseFailures = TELEMETRY.MAX_SSE_FAILURES - 1; // sekali gagal -> langsung kembali ke polling
+    tm.sseFailures = TELEMETRY.MAX_SSE_FAILURES - 1;
     startSSE(gen);
   }, TELEMETRY.SSE_RETRY_MS);
 }
@@ -385,7 +383,7 @@ function startTelemetry() {
     const last = Math.max(tm.lastDataAt, tm.startedAt);
     if (Date.now() - last > TELEMETRY.STALE_MS) {
       setConn("offline", "Server offline");
-      if (tm.mode === "sse" && tm.abort) tm.abort.abort(); // paksa reconnect bila stream macet
+      if (tm.mode === "sse" && tm.abort) tm.abort.abort();
     }
   }, TELEMETRY.WATCHDOG_MS);
 }
@@ -399,15 +397,12 @@ function stopTelemetry(label = "Monitoring dijeda") {
   if (was && state.user) setConn("", label);
 }
 
-// Monitoring hanya aktif jika: sudah login & approved, tab Monitoring terbuka, DAN browser tab terlihat.
 function syncTelemetry() {
   const should = appStarted && state.tab === "monitor" && document.visibilityState === "visible";
   should ? startTelemetry() : stopTelemetry();
 }
 document.addEventListener("visibilitychange", syncTelemetry);
 
-
-// Quick actions
 $$(".action").forEach(btn => btn.addEventListener("click", async () => {
   const { action, title, desc } = btn.dataset;
   if (!await confirmModal(title, desc, "Jalankan")) return;
@@ -476,7 +471,7 @@ function updateAlbumOptions() {
   icons(menu);
 }
 
-// Toggle & Pilih Custom Album Dropdown
+// Custom Album Dropdown
 $("#album-dd-btn")?.addEventListener("click", e => {
   e.stopPropagation();
   const dd = $("#album-dd");
@@ -514,7 +509,7 @@ function closeNewAlbumModal() {
 $("#btn-new-album")?.addEventListener("click", () => {
   newAlbumInput.value = "";
   newAlbumModal.classList.remove("hidden");
-  setTimeout(() => newAlbumInput.focus(), 40);
+  requestAnimationFrame(() => newAlbumInput.focus());
 });
 $("#cancel-new-album")?.addEventListener("click", closeNewAlbumModal);
 newAlbumModal?.addEventListener("click", e => { if (e.target === newAlbumModal) closeNewAlbumModal(); });
@@ -526,7 +521,7 @@ function submitNewAlbum() {
   state.galleryAlbum = clean;
   closeNewAlbumModal();
   renderGallery();
-  toast(`Album "${clean}" aktif. Upload baru akan otomatis masuk ke album ini.`, "info", 4500);
+  toast(`Album "${clean}" aktif.`, "info", 3000);
 }
 $("#save-new-album")?.addEventListener("click", submitNewAlbum);
 newAlbumInput?.addEventListener("keydown", e => {
@@ -545,7 +540,6 @@ function renderGallery() {
   $("#album-controls")?.classList.toggle("hidden", isTrash);
   $("#dropzone")?.classList.toggle("hidden", isTrash);
 
-  // Filter berdasarkan Sampah / Tipe / Album / Search
   state.filteredMedia = state.media.filter(m => {
     if (isTrash) {
       if (!m.deletedAt) return false;
@@ -592,7 +586,7 @@ function renderGallery() {
     });
     wrap.append(h, grid);
   }
-  icons(); observeThumbs();
+  icons(wrap); observeThumbs();
 }
 
 // Filter Tipe & Sampah
@@ -612,7 +606,7 @@ $("#btn-empty-trash")?.addEventListener("click", async () => {
   } catch (e) { toast(e.message, "error"); }
 });
 
-// Thumbnail lazy-load (butuh header Authorization -> fetch sebagai blob)
+// Thumbnail lazy-load
 const thumbCache = new Map();
 const io = new IntersectionObserver(entries => {
   entries.forEach(en => { if (en.isIntersecting) { io.unobserve(en.target); loadThumb(en.target); } });
@@ -638,7 +632,6 @@ async function loadThumb(tile) {
   }
 }
 
-// Signed URL (untuk <video>, full image & download, karena <video src> tak bisa kirim header)
 async function getSignedUrl(id, download = false) {
   const r = await apiJson(`/api/media/${encodeURIComponent(id)}/url${download ? "?download=1" : ""}`);
   if (!r.url) throw new ApiError("Server tidak mengembalikan URL file.");
@@ -710,7 +703,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowRight" && state.lbIndex < state.filteredMedia.length - 1) openLightbox(state.lbIndex + 1);
 });
 
-// ===== Modal Share Link Sementara =====
+// Modal Share Link Sementara
 const shareModal = $("#modal-share");
 let selectedShareHours = 24;
 
@@ -764,7 +757,7 @@ $("#btn-copy-share")?.addEventListener("click", async () => {
 $("#close-share-modal")?.addEventListener("click", closeShareModal);
 shareModal?.addEventListener("click", e => { if (e.target === shareModal) closeShareModal(); });
 
-// ===== Modal Pindah / Pilih Album (pakai Select) =====
+// Modal Pindah / Pilih Album (Select)
 const moveAlbumModal = $("#modal-move-album");
 const moveAlbumSelect = $("#select-move-album");
 const moveNewWrap = $("#move-new-album-wrap");
@@ -797,7 +790,7 @@ $("#lb-album")?.addEventListener("click", () => {
 moveAlbumSelect?.addEventListener("change", () => {
   const isNew = moveAlbumSelect.value === "__NEW__";
   moveNewWrap.classList.toggle("hidden", !isNew);
-  if (isNew) setTimeout(() => moveNewInput.focus(), 40);
+  if (isNew) requestAnimationFrame(() => moveNewInput.focus());
 });
 
 $("#cancel-move-album")?.addEventListener("click", closeMoveAlbumModal);
@@ -925,7 +918,6 @@ async function processQueue() {
   state.uploading = false;
 }
 
-// Upload satu chunk via XHR agar ada progress byte-level; retry 3x
 function sendChunk(form, onProgress) {
   return new Promise(async (resolve, reject) => {
     let token; try { token = await getToken(); } catch (e) { return reject(e); }
@@ -938,7 +930,7 @@ function sendChunk(form, onProgress) {
       let msg = `HTTP ${xhr.status}`; try { msg = JSON.parse(xhr.responseText).message || msg; } catch {}
       reject(new ApiError(msg, xhr.status));
     };
-    xhr.onerror = () => reject(new ApiError("Koneksi ke tunnel terputus.", 0, true));
+    xhr.onerror = () => reject(new ApiError("Koneksi ke server terputus.", 0, true));
     xhr.ontimeout = () => reject(new ApiError("Timeout saat mengirim chunk.", 0, true));
     xhr.timeout = 120000;
     xhr.send(form);
@@ -987,7 +979,6 @@ async function uploadFileChunked(file, setProgress) {
   });
 }
 
-// Dimensi opsional untuk layout grid
 function getDimensions(file) {
   return new Promise(resolve => {
     const url = URL.createObjectURL(file); const done = d => { URL.revokeObjectURL(url); resolve(d); };
@@ -1048,13 +1039,6 @@ $("#admin-filter").addEventListener("click", e => {
   renderAdmin();
 });
 
-// Catat perubahan status user ke log server saat admin klik Approve/Reject
-// (Di dalam handler #admin-body setelah await updateDoc(...)):
-// apiJson("/api/actions/audit", "POST", { action: "USER_STATUS", target: u.email || u.displayName, detail: `Status diubah menjadi ${act}` }).catch(() => {});
-
-state.adminLogs = [];
-state.logFilter = "all";
-
 async function loadAdminLogs() {
   if (state.profile?.role !== "admin") return;
   const body = $("#logs-body");
@@ -1098,4 +1082,5 @@ $("#log-filter")?.addEventListener("click", e => {
   $$("#log-filter button").forEach(x => x.classList.toggle("active", x === b));
   renderAdminLogs();
 });
+
 icons();
